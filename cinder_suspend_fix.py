@@ -39,25 +39,23 @@ class cinderSuspendFix:
    # Uses dmsetup to find volumes in a suspended state
    def _getSuspendedVols(self):
       try:
-         myoutput = subprocess.check_output(['dmsetup','info'])
+         myoutput = subprocess.check_output(['dmsetup','info','-c','--noheadings','-o','name,suspended'])
          if self.debug:
             self._logging("Checking output:\n %s" % myoutput)
          
-         mysearch = re.compile('^Name: *cinder--volumes-volume--[0-9a-z]{8}--[0-9a-z-]{18}[0-9a-z]{12}[0-9a-z-]{0,5}\n^State: *SUSPENDED$ \
-         |^Name: *cinder--volumes-_snapshot--[0-9a-z]{8}--[0-9a-z-]{18}[0-9a-z]{12}[0-9a-z-]{0,5}\n^State: *SUSPENDED$', re.MULTILINE)
- 
+         mysearch = re.compile('[a-z0-9-_:]*Suspended', re.MULTILINE)
          mymatch = re.findall(mysearch,myoutput)
 
          volumeList=list()
          for i in mymatch:
-            newLinePos = i.index('\n')
-            volumeList.append(i[19:newLinePos])
+            delim = i.index(':')
+            volumeList.append(i[0:delim])
          return volumeList
 
       except subprocess.CalledProcessError as procError:
          self._logging(procError.output)
       except Exception as exception:
-         self._logging(exception)
+         self._logging(exception.message)
 
    # Uses dmsetup to resume a suspended volume.
    # seancarlisle: This method originally used lvchange, but I somehow managed to suspend a *-real device
@@ -65,7 +63,7 @@ class cinderSuspendFix:
    def _setAvailable(self,volume):
       try:
          self._logging("Attempting to resume %s ..." % volume)
-         subprocess.call(['dmsetup', 'resume', volume])
+         subprocess.call(['dmsetup', 'resume', '-y', volume])
          self._logging("%s resumed successfully" % volume)
          return 0
       except subprocess.CalledProcessError as procError:
@@ -89,7 +87,7 @@ class cinderSuspendFix:
 
    # Emails the list of fixed volumes
    def _sendEmail(self, fixedVolumes, failedVolumes):
-      message = self._buildMessage(fixedVolumes)
+      message = self._buildMessage(fixedVolumes, failedVolumes)
       try:      
          self._logging("Attempting to send email...")
          msg = MIMEText(message)
@@ -183,6 +181,9 @@ class cinderSuspendFix:
          elif len(currentSuspended) > 0:
             self._logging("Found the following suspended volumes: \n %s" % currentSuspended)
             
+            # scarlisle: Sort the list prior to attempting resume. This will put *-real and *-cow first
+            # which is what we want, otherwise dmsetup will hang indefinitely.
+            currentSuspended.sort(key=len, reverse=True)
             for volume in currentSuspended:
                # If the volume is in our list already, attempt to resume it
                if self._checkForExisting(volume) > 0:
@@ -215,17 +216,6 @@ class SubprocessTimeoutError(Exception):
 
 class SubprocessError(Exception):
    pass
-
-
-#parser = argparse.ArgumentParser()
-#parser.add_argument('--interval', help='Interval to check for suspended volumes')
-#parser.add_argument('--debug', help='Provide debug logging')
-#parser.add_argument('--log', help='Logging destination (leave blank for stdout)')
-#args = parser.parse_args()
-#
-#suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log)
-#
-#suspendFixer.do_run()
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser()
