@@ -42,7 +42,8 @@ class cinderSuspendFix:
          if self.debug:
             self._logging("Checking output:\n %s" % myoutput)
          
-         mysearch = re.compile('^Name: *cinder--volumes-volume--[0-9a-z]{8}--[0-9a-z-]{18}[0-9a-z]{12}[0-9a-z-]{0,5}\n^State: *SUSPENDED$', re.MULTILINE)
+         mysearch = re.compile('^Name: *cinder--volumes-volume--[0-9a-z]{8}--[0-9a-z-]{18}[0-9a-z]{12}[0-9a-z-]{0,5}\n^State: *SUSPENDED$ \
+         |^Name: *cinder--volumes-_snapshot--[0-9a-z]{8}--[0-9a-z-]{18}[0-9a-z]{12}[0-9a-z-]{0,5}\n^State: *SUSPENDED$', re.MULTILINE)
  
          mymatch = re.findall(mysearch,myoutput)
 
@@ -65,10 +66,14 @@ class cinderSuspendFix:
          self._logging("Attempting to resume %s ..." % volume)
          subprocess.call(['dmsetup', 'resume', volume])
          self._logging("%s resumed successfully" % volume)
+         return 0
       except subprocess.CalledProcessError as procError:
          self._logging(procError.output)
+         return 1
       except Exception as exception:
          self._logging(exception)
+         return 1
+
    # Check if we already know about the suspended volume from the previous run
    def _checkForExisting(self, volume):
       return self.suspendedVolumeList.count(volume) 
@@ -82,13 +87,14 @@ class cinderSuspendFix:
       self.suspendedVolumeList.remove(volume)    
 
    # Emails the list of fixed volumes
-   def _sendEmail(self, fixedVolumes):
+   def _sendEmail(self, fixedVolumes, failedVolumes):
       message = self._buildMessage(fixedVolumes)
       try:      
          self._logging("Attempting to send email...")
          msg = MIMEText(message)
-         msg['Subject'] = 'Suspended Cinder Volumes on %s' % subprocess.check_output(['hostname'])
-         msg['From'] = 'mail@%s' % subprocess.check_output(['hostname'])
+         hostname = subprocess.check_output(['hostname'])
+         msg['Subject'] = 'Suspended Cinder Volumes on %s' % hostname
+         msg['From'] = 'mail@%s' % hostname
          msg['To'] = 'root@localhost'
 
          s = smtplib.SMTP('localhost')
@@ -99,50 +105,62 @@ class cinderSuspendFix:
          self._logging(exception)
 
    # Creates the message for emailing the peoples
-   def _buildMessage(self, fixedVolumes):
-      message = "The following volumes were found to have been suspended and have been re-enabled:\n\n"
-      for volume in fixedVolumes:
-         message += volume + "\n"
+   def _buildMessage(self, fixedVolumes, failedVolumes):
+      message = ''
+      if len(fixedVolumes) > 0:
+         message = "The following volumes were found to have been suspended and have been resumed:\n\n"
+         for volume in fixedVolumes:
+            message += volume + "\n"
+         message += "\n"
+      if len(failedVolumes) > 0:
+         message += "The following volumes failed to resume and require investigation:\n\n"
+         for volume in failedVolumes:
+            message += volume + "\n"
 
       return message
 
-   # Debug logging 
+   # Basic logging method
    def _logging(self, message):
       formattedMessage = time.strftime("%Y-%m-%d %H:%M:%S",time.localtime()) + " " + message + "\n"
-      #if isinstance(self.logHandle, file): 
-      #   print "hello inside isinstance"
       self.logHandle.write(formattedMessage)
       self.logHandle.flush()
-      #else:
-      #   print formattedMessage
       
    # Main program loop
    def do_run(self):
+      fixedVolumeList = list()
+      failedVolumeList = list()
+
       while True:
          currentSuspended = self._getSuspendedVols()
          if currentSuspended is None:
             self._logging("Unable to retreive volume list...")
-         else:
-            if self.debug:
-               self._logging("got the following suspended volumes: %s" % currentSuspended)
-            elif len(currentSuspended) > 0:
-               self._logging("Found the following suspended volumes: \n %s" % currentSuspended)
-            fixedVolumeList = list()
-            failedVolumeList = list()
-
+         elif len(currentSuspended) > 0:
+            self._logging("Found the following suspended volumes: \n %s" % currentSuspended)
+            
             for volume in currentSuspended:
                # If the volume is in our list already, attempt to resume it
                if self._checkForExisting(volume) > 0:
-                  self._setAvailable(volume)
-                  self._removeVolumeFromGlobalList(volume)
-                  fixedVolumeList.append(volume[16:].replace('--','-'))
+                  if self._setAvailable(volume) == 0:
+                     self._removeVolumeFromGlobalList(volume)
+                     fixedVolumeList.append(volume[16:].replace('--','-'))
+                  else:
+                     failedVolumeList.append(volume[16:].replace('--','-'))
+
                # Else add it to the list for the next go-around
                else:
                   self._logging("Adding %s to the list for the next run" % volume)
                   self._addVolumeToGlobalList(volume)
-            if len(fixedVolumeList) > 0:
+            if len(fixedVolumeList) > 0 or len(failedVolumeList) > 0:
                self._logging("Sending email")
-               self._sendEmail(fixedVolumeList)
+               self._sendEmail(fixedVolumeList, failedVolumeList)
+
+               # Clear the lists for the next round
+               for i in range(1, len(fixedVolumeList)):
+                  fixedVolumeList.pop()
+
+               for i in range(1, len(failedVolumeList)):
+                  failedVolumeList.pop()
+
          self._logging("sleeping for %s seconds..." % self.checkInterval)
          time.sleep(self.checkInterval)
   
