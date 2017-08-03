@@ -18,6 +18,7 @@ import time
 import smtplib
 from email.mime.text import MIMEText
 import sys
+from threading import Timer
 
 class cinderSuspendFix:
    def __init__(self,checkInterval=None,debug=None,logDestination=None):
@@ -119,6 +120,37 @@ class cinderSuspendFix:
 
       return message
 
+   # Sends email about tgtd issue
+   def _tgtdEmail(self, tgtdError):
+      try:      
+         self._logging("Attempting to send email...")
+         msg = MIMEText(tgtdError)
+         hostname = subprocess.check_output(['hostname'])
+         msg['Subject'] = 'Daemon tgtd unresponsive on host %s' % hostname
+         msg['From'] = 'mail@%s' % hostname
+         msg['To'] = 'root@localhost'
+
+         s = smtplib.SMTP('localhost')
+         s.sendmail(msg['From'], msg['To'], msg.as_string())
+         s.quit()
+         self._logging("Email sent to the following recipients: " + msg['To'])
+      except Exception as exception:
+         self._logging(str(exception))
+
+   def _tgtdTest(self, timeout_sec):
+      FNULL = open(os.devnull, 'w')
+      cmd = ['tgtadm', '-C', '0', '--op', 'show', '--mode', 'target']
+      proc = subprocess.Popen(cmd, stdout=FNULL, stderr=FNULL)
+      timer = Timer(timeout_sec, proc.kill)
+      timer.start()
+      output, err = proc.communicate()
+      if timer.is_alive():
+          # Process completed naturally - cancel timer and return exit code
+          timer.cancel()
+          return proc.returncode, output
+      # Process killed by timer - raise exception
+      raise SubprocessTimeoutError('Command `tgt-admin` (pid #%d) killed after %i seconds. Daemon `tgtd` may be dead.' % (proc.pid, timeout_sec))
+
    # Basic logging method
    def _logging(self, message):
       formattedMessage = time.strftime("%Y-%m-%d %H:%M:%S",time.localtime()) + " " + message + "\n"
@@ -131,6 +163,20 @@ class cinderSuspendFix:
       failedVolumeList = list()
 
       while True:
+         ########## BEGIN CAMP4034 ##########
+         # Test tgtd
+         tgtd_timeout = 5
+         try:
+            tgtadm_status, tgtadm_output = self._tgtdTest(tgtd_timeout)
+            if tgtadm_status != 0:
+               raise SubprocessError("Command `tgt-admin -s` returned non-zero exit status.  Is tgtd running?")
+            else:
+               self._logging("Command `tgt-admin -s` executed successfully, tgtd assumed responsive.")
+         except (SubprocessError, SubprocessTimeoutError) as error:
+            self._logging(str(error))
+            self._tgtdEmail(str(error))
+         ########## END CAMP4034 ##########
+
          currentSuspended = self._getSuspendedVols()
          if currentSuspended is None:
             self._logging("Unable to retreive volume list...")
@@ -163,8 +209,13 @@ class cinderSuspendFix:
 
          self._logging("sleeping for %s seconds..." % self.checkInterval)
          time.sleep(self.checkInterval)
-  
- 
+
+class SubprocessTimeoutError(Exception):
+   pass
+
+class SubprocessError(Exception):
+   pass
+
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument('--interval', help='Interval to check for suspended volumes')
@@ -186,5 +237,4 @@ if __name__ == '__main__':
    suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log)
 
    suspendFixer.do_run()
-
 
