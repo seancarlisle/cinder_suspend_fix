@@ -15,6 +15,7 @@ import subprocess
 import re
 import argparse
 import time
+from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 import sys
@@ -29,7 +30,6 @@ class cinderSuspendFix:
             self.logHandle = sys.stdout
          else:
             self.logHandle = open(logDestination, 'a')
-            print "I should be writing to a file"
       except Exception as exception:
          self.logHandle = sys.stdout
          self._logging(exception.message)
@@ -175,7 +175,12 @@ class cinderSuspendFix:
 
    # Basic logging method
    def _logging(self, message):
-      formattedMessage = time.strftime("%Y-%m-%d %H:%M:%S",time.localtime()) + " " + message + "\n"
+      messageLines = message.split('\n')
+      formattedMessage = ''
+      # Append the timestamp to each line to make the logging more "official"
+      for line in messageLines:
+         formattedMessage += str(datetime.utcnow().isoformat(' '))[:-3] + " " + line + "\n"
+
       self.logHandle.write(formattedMessage)
       self.logHandle.flush()
       
@@ -248,7 +253,6 @@ if __name__ == '__main__':
    parser.add_argument('--log', help='Logging destination. Defaults to stdout')
    parser.add_argument('--email', help='List of recipients to send email alerts to. Defaults to root@localhost', nargs=argparse.REMAINDER)
    args = parser.parse_args()
-   print str(args)
 
    suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log)
 
