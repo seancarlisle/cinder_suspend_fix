@@ -21,22 +21,46 @@ import sys
 from threading import Timer
 
 class cinderSuspendFix:
-   def __init__(self,checkInterval=None,debug=None,logDestination=None):
+   def __init__(self, checkInterval=None, debug=None, logDestination=None, email=None):
       self.suspendedVolumeList = list()
-      if checkInterval is None:
-         self.checkInterval = 10.0
-      else:
-         self.checkInterval = float(checkInterval)
-      if debug is None:
-         self.debug = False
-      else:
-         self.debug = debug
-      if logDestination is None:
+     
+      try:
+         if logDestination is None:
+            self.logHandle = sys.stdout
+         else:
+            self.logHandle = open(logDestination, 'a')
+            print "I should be writing to a file"
+      except Exception as exception:
          self.logHandle = sys.stdout
-      else:
-         self.logHandle = open(logDestination, 'a')
+         self._logging(exception.message)
+         self._logging("Unable to open %s for logging, reverting to stdout" % logDestination)
+ 
+      try:
+         if checkInterval is None:
+            self.checkInterval = 10.0
+         else:
+            self.checkInterval = float(checkInterval)
+      except Exception as exception:
+         self._logging(exception.message)
+         self._logging("Invalid check interval, defaulting to 10 seconds")
+         self.checkInterval = 10.0
 
-   # Uses dmsetup to find volumes in a suspended state
+      self.debug = debug
+
+      try:
+         if email is None:
+            self.email = "root@localhost"
+         else:
+            self.email = email.replace(' ',';')
+      except Exception as exception:
+         self._logging(exception.message)
+         self._logging("Invalid email, reverting to root@localhost")
+         self.email = "root@localhost"
+
+      if self.debug:
+         self._logging("check Interval %s, logDestination: %s, email: %s" % (self.checkInterval,self.logHandle.name, self.email))
+ 
+  # Uses dmsetup to find volumes in a suspended state
    def _getSuspendedVols(self):
       try:
          myoutput = subprocess.check_output(['dmsetup','info','-c','--noheadings','-o','name,suspended'])
@@ -70,7 +94,7 @@ class cinderSuspendFix:
          self._logging(procError.output)
          return 1
       except Exception as exception:
-         self._logging(exception)
+         self._logging(exception.message)
          return 1
 
    # Check if we already know about the suspended volume from the previous run
@@ -94,14 +118,14 @@ class cinderSuspendFix:
          hostname = subprocess.check_output(['hostname'])
          msg['Subject'] = 'Suspended Cinder Volumes on %s' % hostname
          msg['From'] = 'mail@%s' % hostname
-         msg['To'] = 'root@localhost'
+         msg['To'] = self.email
 
          s = smtplib.SMTP('localhost')
          s.sendmail(msg['From'], msg['To'], msg.as_string())
          s.quit()
          self._logging("Email sent to the following recipients: " + msg['To'])
       except Exception as exception:
-         self._logging(exception)
+         self._logging(exception.message)
 
    # Creates the message for emailing the peoples
    def _buildMessage(self, fixedVolumes, failedVolumes):
@@ -126,7 +150,7 @@ class cinderSuspendFix:
          hostname = subprocess.check_output(['hostname'])
          msg['Subject'] = 'Daemon tgtd unresponsive on host %s' % hostname
          msg['From'] = 'mail@%s' % hostname
-         msg['To'] = 'root@localhost'
+         msg['To'] = self.email
 
          s = smtplib.SMTP('localhost')
          s.sendmail(msg['From'], msg['To'], msg.as_string())
@@ -219,10 +243,12 @@ class SubprocessError(Exception):
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser()
-   parser.add_argument('--interval', help='Interval to check for suspended volumes')
-   parser.add_argument('--debug', help='Provide debug logging')
-   parser.add_argument('--log', help='Logging destination (leave blank for stdout)')
+   parser.add_argument('--interval', help='Interval to check for suspended volumes. Defaults to 10 seconds.')
+   parser.add_argument('--debug', default=False, action='store_true', help='Provide debug logging')
+   parser.add_argument('--log', help='Logging destination. Defaults to stdout')
+   parser.add_argument('--email', help='List of recipients to send email alerts to. Defaults to root@localhost', nargs=argparse.REMAINDER)
    args = parser.parse_args()
+   print str(args)
 
    suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log)
 
