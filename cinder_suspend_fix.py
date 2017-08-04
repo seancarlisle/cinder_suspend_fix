@@ -43,7 +43,7 @@ class cinderSuspendFix:
          if self.debug:
             self._logging("Checking output:\n %s" % myoutput)
          
-         mysearch = re.compile('[a-z0-9-_:]*Suspended', re.MULTILINE)
+         mysearch = re.compile('^cinder--volumes-[a-z0-9-_]*:Suspended', re.MULTILINE)
          mymatch = re.findall(mysearch,myoutput)
 
          volumeList=list()
