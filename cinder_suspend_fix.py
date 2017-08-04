@@ -24,7 +24,7 @@ from threading import Timer
 class cinderSuspendFix:
    def __init__(self, checkInterval=None, debug=None, logDestination=None, email=None):
       self.suspendedVolumeList = list()
-     
+
       try:
          if logDestination is None:
             self.logHandle = sys.stdout
@@ -34,7 +34,7 @@ class cinderSuspendFix:
          self.logHandle = sys.stdout
          self._logging(exception.message)
          self._logging("Unable to open %s for logging, reverting to stdout" % logDestination)
- 
+
       try:
          if checkInterval is None:
             self.checkInterval = 10.0
@@ -51,7 +51,13 @@ class cinderSuspendFix:
          if email is None:
             self.email = "root@localhost"
          else:
-            self.email = email.replace(' ',';')
+            self.email=''
+            if isinstance(email, list):
+               for item in email:
+                  print "item: %s self.email: %s" % (item,self.email)
+                  self.email += item + ';'
+            else:
+               self.email = email
       except Exception as exception:
          self._logging(exception.message)
          self._logging("Invalid email, reverting to root@localhost")
@@ -59,14 +65,14 @@ class cinderSuspendFix:
 
       if self.debug:
          self._logging("check Interval %s, logDestination: %s, email: %s" % (self.checkInterval,self.logHandle.name, self.email))
- 
+
   # Uses dmsetup to find volumes in a suspended state
    def _getSuspendedVols(self):
       try:
          myoutput = subprocess.check_output(['dmsetup','info','-c','--noheadings','-o','name,suspended'])
          if self.debug:
             self._logging("Checking output:\n %s" % myoutput)
-         
+
          mysearch = re.compile('^cinder--volumes-[a-z0-9-_]*:Suspended', re.MULTILINE)
          mymatch = re.findall(mysearch,myoutput)
 
@@ -99,7 +105,7 @@ class cinderSuspendFix:
 
    # Check if we already know about the suspended volume from the previous run
    def _checkForExisting(self, volume):
-      return self.suspendedVolumeList.count(volume) 
+      return self.suspendedVolumeList.count(volume)
 
    # Adds the specific volume to the list to resume on the next loop
    def _addVolumeToGlobalList(self, volume):
@@ -107,12 +113,12 @@ class cinderSuspendFix:
 
    # Remove the specific volume from the list after doing things to it
    def _removeVolumeFromGlobalList(self, volume):
-      self.suspendedVolumeList.remove(volume)    
+      self.suspendedVolumeList.remove(volume)
 
    # Emails the list of fixed volumes
    def _sendEmail(self, fixedVolumes, failedVolumes):
       message = self._buildMessage(fixedVolumes, failedVolumes)
-      try:      
+      try:
          self._logging("Attempting to send email...")
          msg = MIMEText(message)
          hostname = subprocess.check_output(['hostname'])
@@ -129,9 +135,9 @@ class cinderSuspendFix:
 
    # Creates the message for emailing the peoples
    def _buildMessage(self, fixedVolumes, failedVolumes):
-      message = ''
+      message = "Hello,\n\n"
       if len(fixedVolumes) > 0:
-         message = "The following volumes were found to have been suspended and have been resumed:\n\n"
+         message += "The following volumes were found to have been suspended and have been resumed:\n\n"
          for volume in fixedVolumes:
             message += volume + "\n"
          message += "\n"
@@ -140,11 +146,13 @@ class cinderSuspendFix:
          for volume in failedVolumes:
             message += volume + "\n"
 
+      message += "For immediate issues, please reach out to the RPC Support team at 1.800.633.1021.\n\nThank You,\n\n GE Account Team\n"
+
       return message
 
    # Sends email about tgtd issue
    def _tgtdEmail(self, tgtdError):
-      try:      
+      try:
          self._logging("Attempting to send email...")
          msg = MIMEText(tgtdError)
          hostname = subprocess.check_output(['hostname'])
@@ -183,7 +191,7 @@ class cinderSuspendFix:
 
       self.logHandle.write(formattedMessage)
       self.logHandle.flush()
-      
+
    # Main program loop
    def do_run(self):
       fixedVolumeList = list()
@@ -209,7 +217,7 @@ class cinderSuspendFix:
             self._logging("Unable to retreive volume list...")
          elif len(currentSuspended) > 0:
             self._logging("Found the following suspended volumes: \n %s" % currentSuspended)
-            
+
             # scarlisle: Sort the list prior to attempting resume. This will put *-real and *-cow first
             # which is what we want, otherwise dmsetup will hang indefinitely.
             currentSuspended.sort(key=len, reverse=True)
@@ -229,8 +237,7 @@ class cinderSuspendFix:
             if len(fixedVolumeList) > 0 or len(failedVolumeList) > 0:
                self._logging("Sending email")
                self._sendEmail(fixedVolumeList, failedVolumeList)
-
-               # Clear the lists for the next round
+              # Clear the lists for the next round
                for i in range(1, len(fixedVolumeList)):
                   fixedVolumeList.pop()
 
@@ -254,7 +261,6 @@ if __name__ == '__main__':
    parser.add_argument('--email', help='List of recipients to send email alerts to. Defaults to root@localhost', nargs=argparse.REMAINDER)
    args = parser.parse_args()
 
-   suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log)
+   suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log, args.email)
 
    suspendFixer.do_run()
-
