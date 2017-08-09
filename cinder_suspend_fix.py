@@ -20,6 +20,8 @@ import smtplib
 from email.mime.text import MIMEText
 import sys
 from threading import Timer
+import json
+import requests
 
 class cinderSuspendFix:
    def __init__(self, checkInterval=None, debug=None, logDestination=None, email=None):
@@ -111,23 +113,35 @@ class cinderSuspendFix:
       self.suspendedVolumeList.remove(volume)
 
    # Emails the list of fixed volumes
-   def _sendEmail(self, fixedVolumes, failedVolumes):
+   #def _sendEmail(self, fixedVolumes, failedVolumes):
+   #   message = self._buildMessage(fixedVolumes, failedVolumes)
+   #   try:
+   #      self._logging("Attempting to send email...")
+   #      msg = MIMEText(message)
+   #      hostname = subprocess.check_output(['hostname'])
+   #      msg['Subject'] = 'Suspended Cinder Volumes on %s' % hostname
+   #      msg['From'] = 'mail@%s' % hostname
+   #      self.email
+   #
+   #      s = smtplib.SMTP('localhost')
+   #      s.sendmail(msg['From'], self.email, msg.as_string())
+   #      s.quit()
+   #      self._logging("Email sent to the following recipients: " + msg['To'])
+   #   except Exception as exception:
+   #      self._logging(exception.message)
+
+   # Sends slack message to slack channel
+   def _slackNotify(self, fixedVolumes, failedVolumes):
       message = self._buildMessage(fixedVolumes, failedVolumes)
       try:
-         self._logging("Attempting to send email...")
-         msg = MIMEText(message)
-         hostname = subprocess.check_output(['hostname'])
-         msg['Subject'] = 'Suspended Cinder Volumes on %s' % hostname
-         msg['From'] = 'mail@%s' % hostname
-         self.email
-
-         s = smtplib.SMTP('localhost')
-         s.sendmail(msg['From'], self.email, msg.as_string())
-         s.quit()
-         self._logging("Email sent to the following recipients: " + msg['To'])
+         self._logging("Sending message to slack")
+         url = 'localhost'
+         payload = {'channel':'#channel','username':'user','text':message}
+         r = requests.post(url,data=json.dumps(payload))
+         self._logging("sent the following payload: %s and got the following response: %s:%s" % (json.dumps(payload),r,r.text))
       except Exception as exception:
          self._logging(exception.message)
-
+ 
    # Creates the message for emailing the peoples
    def _buildMessage(self, fixedVolumes, failedVolumes):
       message = "Hello,\n\n"
@@ -231,8 +245,9 @@ class cinderSuspendFix:
                   self._addVolumeToGlobalList(volume)
             if len(fixedVolumeList) > 0 or len(failedVolumeList) > 0:
                self._logging("Sending email")
-               self._sendEmail(fixedVolumeList, failedVolumeList)
-              # Clear the lists for the next round
+               #self._sendEmail(fixedVolumeList, failedVolumeList)
+               self._slackNotify(fixedVolumeList, failedVolumeList)
+               # Clear the lists for the next round
                for i in range(1, len(fixedVolumeList)):
                   fixedVolumeList.pop()
 
