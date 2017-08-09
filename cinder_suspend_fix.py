@@ -51,13 +51,8 @@ class cinderSuspendFix:
          if email is None:
             self.email = "root@localhost"
          else:
-            self.email=''
-            if isinstance(email, list):
-               for item in email:
-                  print "item: %s self.email: %s" % (item,self.email)
-                  self.email += item + ';'
-            else:
-               self.email = email
+            print "item: %s self.email: %s" % (item,self.email)
+            self.email = email
       except Exception as exception:
          self._logging(exception.message)
          self._logging("Invalid email, reverting to root@localhost")
@@ -93,9 +88,9 @@ class cinderSuspendFix:
    def _setAvailable(self,volume):
       try:
          self._logging("Attempting to resume %s ..." % volume)
-         subprocess.call(['dmsetup', 'resume', '-y', volume])
+         returnCode = subprocess.call(['dmsetup', 'resume', '-y', volume])
          self._logging("%s resumed successfully" % volume)
-         return 0
+         return returnCode
       except subprocess.CalledProcessError as procError:
          self._logging(procError.output)
          return 1
@@ -124,10 +119,10 @@ class cinderSuspendFix:
          hostname = subprocess.check_output(['hostname'])
          msg['Subject'] = 'Suspended Cinder Volumes on %s' % hostname
          msg['From'] = 'mail@%s' % hostname
-         msg['To'] = self.email
+         self.email
 
          s = smtplib.SMTP('localhost')
-         s.sendmail(msg['From'], msg['To'], msg.as_string())
+         s.sendmail(msg['From'], self.email, msg.as_string())
          s.quit()
          self._logging("Email sent to the following recipients: " + msg['To'])
       except Exception as exception:
