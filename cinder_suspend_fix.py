@@ -144,7 +144,7 @@ class cinderSuspendFix:
  
    # Creates the message for emailing the peoples
    def _buildMessage(self, fixedVolumes, failedVolumes):
-      message = "Hello,\n\n"
+      message = ''
       if len(fixedVolumes) > 0:
          message += "The following volumes were found to have been suspended and have been resumed:\n\n"
          for volume in fixedVolumes:
@@ -154,8 +154,6 @@ class cinderSuspendFix:
          message += "The following volumes failed to resume and require investigation:\n\n"
          for volume in failedVolumes:
             message += volume + "\n"
-
-      message += "For immediate issues, please reach out to the RPC Support team at 1.800.633.1021.\n\nThank You,\n\n GE Account Team\n"
 
       return message
 
