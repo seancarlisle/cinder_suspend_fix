@@ -281,9 +281,10 @@ if __name__ == '__main__':
    parser.add_argument('--interval', help='Interval to check for suspended volumes. Defaults to 10 seconds.')
    parser.add_argument('--debug', default=False, action='store_true', help='Provide debug logging')
    parser.add_argument('--log', help='Logging destination. Defaults to stdout')
-   parser.add_argument('--email', help='List of recipients to send email alerts to. Defaults to root@localhost', nargs=argparse.REMAINDER)
+   #parser.add_argument('--email', help='List of recipients to send email alerts to. Defaults to root@localhost', nargs=argparse.REMAINDER)
    args = parser.parse_args()
 
-   suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log, args.email)
+   #suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log, args.email)
+   suspendFixer = cinderSuspendFix(args.interval, args.debug, args.log)
 
    suspendFixer.do_run()
