@@ -138,7 +138,10 @@ class cinderSuspendFix:
          url = 'localhost'
          payload = {'channel':'#channel','username':'user','text':message}
          r = requests.post(url,data=json.dumps(payload))
-         self._logging("sent the following payload: %s and got the following response: %s:%s" % (json.dumps(payload),r,r.text))
+         if self.debug:
+            self._logging("sent the following payload: %s and got the following response: %s:%s" % (json.dumps(payload),r,r.text))
+         if r > 300:
+            self._logging("Failed to post to Slack. Reason: %s" % r.text)
       except Exception as exception:
          self._logging(exception.message)
  
@@ -160,17 +163,29 @@ class cinderSuspendFix:
    # Sends email about tgtd issue
    def _tgtdEmail(self, tgtdError):
       try:
-         self._logging("Attempting to send email...")
-         msg = MIMEText(tgtdError)
+         ###### seancarlisle: Converted to use slack notification ############
+         #self._logging("Attempting to send email...")
+         #msg = MIMEText(tgtdError)
+         #hostname = subprocess.check_output(['hostname'])
+         #msg['Subject'] = 'Daemon tgtd unresponsive on host %s' % hostname
+         #msg['From'] = 'mail@%s' % hostname
+         #msg['To'] = self.email
+         #
+         #s = smtplib.SMTP('localhost')
+         #s.sendmail(msg['From'], msg['To'], msg.as_string())
+         #s.quit()
+         #self._logging("Email sent to the following recipients: " + msg['To'])
+         
          hostname = subprocess.check_output(['hostname'])
-         msg['Subject'] = 'Daemon tgtd unresponsive on host %s' % hostname
-         msg['From'] = 'mail@%s' % hostname
-         msg['To'] = self.email
-
-         s = smtplib.SMTP('localhost')
-         s.sendmail(msg['From'], msg['To'], msg.as_string())
-         s.quit()
-         self._logging("Email sent to the following recipients: " + msg['To'])
+         self._logging("Sending message to slack")
+         url = 'localhost'
+         payload = {'channel':'#channel','username':'user','text':tgtdError}
+         r = requests.post(url,data=json.dumps(payload))
+         if self.debug:
+            self._logging("sent the following payload: %s and got the following response: %s:%s" % (json.dumps(payload),r,r.text))
+         if r > 300:
+            self._logging("Failed to post to Slack. Reason: %s" % r.text)
+         ###### seancarlisle: Converted to use slack notification ############
       except Exception as exception:
          self._logging(str(exception))
 
