@@ -24,7 +24,8 @@ import json
 import requests
 
 class cinderSuspendFix:
-   def __init__(self, checkInterval=None, debug=None, logDestination=None, email=None):
+#   def __init__(self, checkInterval=None, debug=None, logDestination=None, email=None):
+   def __init__(self, checkInterval=None, debug=None, logDestination=None):
       self.suspendedVolumeList = list()
 
       try:
@@ -49,20 +50,20 @@ class cinderSuspendFix:
 
       self.debug = debug
 
-      try:
-         if email is None:
-            self.email = "root@localhost"
-         else:
-            print "item: %s self.email: %s" % (item,self.email)
-            self.email = email
-      except Exception as exception:
-         self._logging(exception.message)
-         self._logging("Invalid email, reverting to root@localhost")
-         self.email = "root@localhost"
+      #try:
+      #   if email is None:
+      #      self.email = "root@localhost"
+      #   else:
+      #      print "item: %s self.email: %s" % (item,self.email)
+      #      self.email = email
+      #except Exception as exception:
+      #   self._logging(exception.message)
+      #   self._logging("Invalid email, reverting to root@localhost")
+      #   self.email = "root@localhost"
 
       if self.debug:
-         self._logging("check Interval %s, logDestination: %s, email: %s" % (self.checkInterval,self.logHandle.name, self.email))
-
+      #   self._logging("check Interval %s, logDestination: %s, email: %s" % (self.checkInterval,self.logHandle.name, self.email))
+         self._logging("check Interval %s, logDestination: %s" % (self.checkInterval,self.logHandle.name))
   # Uses dmsetup to find volumes in a suspended state
    def _getSuspendedVols(self):
       try:
