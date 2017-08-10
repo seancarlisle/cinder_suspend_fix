@@ -1,1 +1,1 @@
-Cron job to scan for suspended LVM volumes and snapshots. If it finds them, it will use lvchange to resume them, then add them to an email sent out detailing the volumes that have been resumed.
+Daemon that checks for Cinder volumes in suspended status and report them via Slack. The daemon will also test the health of the tgt daemon. If tgtadm commands hang, a notification will be sent to Slack as well. The webhook URL and payload have been intentionally genericised.
